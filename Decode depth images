@@ -1,0 +1,125 @@
+
+def bytes_to_bitstring(bytes_arr):
+    return ''.join(format(byte, '08b') for byte in bytes_arr)
+
+def convertBitStringToDecimal(bitString):
+    num = 0
+    idx = 1
+    while idx < len(bitString) + 1:
+        num += 2 ** (-idx) * (bitString[idx - 1] == '1')
+        idx += 1
+    return num
+
+def arithmetic_decoder(tags, probability):
+    numSymbols = len(probability)
+
+    outputSymbols = []
+
+    cumulative_sum = [0.0] * (numSymbols + 1)
+
+    for i in range(1, numSymbols + 1):
+        cumulative_sum[i] = cumulative_sum[i - 1] + probability[i - 1]  # 1 based cumulative sum
+
+    cumulative_sum[numSymbols] = 1.0
+
+    for tag in tags:
+        l = 0.0
+        u = 1.0
+        iterations = 0
+        while len(tag) > 0:
+            if iterations >= 1000000:
+                print("Max iteration limit reached. Exiting.")
+                break
+
+            if l >= 0.0 and u < 0.5:
+                l = 2 * l
+                u = 2 * u
+                tag = tag[1:]
+            elif l >= 0.5 and u <= 1.1:
+                l = 2 * l - 1
+                u = 2 * u - 1
+                tag = tag[1:]
+            elif l >= 0.25 and u < 0.75:
+                l = 2 * l - 0.5
+                u = 2 * u - 0.5
+                if tag[0] == '0':
+                    tag = tag[1:]
+                else:
+                    tag = tag[1:]
+            else:
+                t = convertBitStringToDecimal(tag)
+                delta = u - l
+                new_t = (t - l) / delta
+                letterIdx = numSymbols - 1
+
+                for i in range(len(cumulative_sum) - 1):
+                    if new_t >= cumulative_sum[i] and new_t <= cumulative_sum[i + 1]:
+                        letterIdx = i
+                        break
+
+                outputSymbols.append(letterIdx)
+                new_l = l + delta * cumulative_sum[letterIdx]
+                new_u = l + delta * cumulative_sum[letterIdx + 1]
+                l = new_l
+                u = new_u
+                iterations += 1
+
+    return outputSymbols
+
+def decodeTags(tags):
+    tagStringArray = []
+    for tag in tags:
+        tagStringArray.append(tag)
+    return tagStringArray
+
+
+tags_fixed_rate = decodeTags(encoded_array_fixed_rate)
+tags_embedded = decodeTags(encoded_array_embedded)
+
+probability = []
+indices = {}
+
+for i in range(len(probabilityVector)):
+    if probabilityVector[i] > 0.0:
+        indices[len(probability)] = i
+        probability.append(probabilityVector[i])
+
+original_stream_indices_fixed_rate = arithmetic_decoder(tags_fixed_rate, probability)
+original_stream_indices_embedded = arithmetic_decoder(tags_embedded, probability)
+
+original_stream_fixed_rate = []
+original_stream_embedded = []
+
+for idx in original_stream_indices_fixed_rate:
+    original_stream_fixed_rate.append(indices[idx])
+
+for idx in original_stream_indices_embedded:
+    original_stream_embedded.append(indices[idx])
+
+print('----------Checking the lenghts--------------')
+print('Len of original_stream_fixed_rate',len(original_stream_fixed_rate))
+print('Len of original_stream_embedded', len(original_stream_embedded))
+
+# Truncate the original streams to fit the image dimensions
+original_size = dimensions_residual_img[0] * dimensions_residual_img[1]
+original_stream_fixed_rate = original_stream_fixed_rate[:original_size]
+original_stream_embedded = original_stream_embedded[:original_size]
+
+print('Len of truncated original_stream_fixed_rate', len(original_stream_fixed_rate))
+print('Len of truncated original_stream_embedded', len(original_stream_embedded))
+
+# Now reshape the streams
+original_stream_fixed_rate_np = np.array(original_stream_fixed_rate).reshape(dimensions_residual_img)
+original_stream_embedded_np = np.array(original_stream_embedded).reshape(dimensions_residual_img)
+
+# Calculate the decompressed size based on the compressed size and compression ratio
+decompressed_size_fixed_rate = dimensions_residual_img[0] * dimensions_residual_img[1] * residual_img.itemsize * 8
+decompression_ratio_fixed_rate = decompressed_size_fixed_rate / compressed_size_fixed_rate
+decompression_ratio_embedded = decompressed_size_fixed_rate / compressed_size_embedded
+
+print('-----------Residual Image Decompression-----------')
+print("Compressed size fixed_rate:", compressed_size_fixed_rate, "bits")
+print("Compressed size embedded:", compressed_size_embedded, "bits")
+print("Decompressed size:", decompressed_size_fixed_rate, "bits")
+print("Decompression ratio:", decompression_ratio_fixed_rate)
+print("Decompression ratio:", decompression_ratio_embedded)
